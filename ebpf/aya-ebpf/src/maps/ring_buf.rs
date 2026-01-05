@@ -58,7 +58,10 @@ impl DerefMut for RingBufBytes<'_> {
     }
 }
 
-impl RingBufBytes<'_> {
+impl<'a> RingBufBytes<'a> {
+    pub const fn new(m: &'a mut [u8]) -> Self {
+        Self(m)
+    }
     /// Commit this ring buffer entry. The entry will be made visible to the userspace reader.
     pub fn submit(self, flags: u64) {
         let Self(inner) = self;
@@ -98,6 +101,10 @@ impl<T> DerefMut for RingBufEntry<T> {
 }
 
 impl<T> RingBufEntry<T> {
+    pub const fn new(ptr: &'static mut MaybeUninit<T>) -> Self {
+        Self(ptr)
+    }
+
     /// Discard this ring buffer entry. The entry will be skipped by the userspace reader.
     pub fn discard(self, flags: u64) {
         let Self(inner) = self;

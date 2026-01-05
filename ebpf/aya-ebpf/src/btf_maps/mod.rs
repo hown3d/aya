@@ -1,9 +1,11 @@
 use core::marker::PhantomData;
 
 pub mod array;
+pub mod ringbuf;
 pub mod sk_storage;
 
 pub use array::Array;
+pub use ringbuf::RingBuf;
 pub use sk_storage::SkStorage;
 
 /// A marker used to remove names of annotated types in LLVM debug info and
