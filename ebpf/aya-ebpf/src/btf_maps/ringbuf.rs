@@ -72,18 +72,18 @@ impl<V, const M: usize, const F: usize> RingBuf<V, M, F> {
         })
     }
 
-    /// Reserve memory in the ring buffer that can fit `T`.
+    /// Reserve memory in the ring buffer that can fit `V`.
     ///
     /// Returns `None` if the ring buffer is full.
     #[cfg(generic_const_exprs)]
-    pub fn reserve<T: 'static>(&self, flags: u64) -> Option<RingBufEntry<T>>
+    pub fn reserve(&self, flags: u64) -> Option<RingBufEntry<V>>
     where
         Assert<{ 8 % mem::align_of::<T>() == 0 }>: IsTrue,
     {
         self.reserve_impl(flags)
     }
 
-    /// Reserve memory in the ring buffer that can fit `T`.
+    /// Reserve memory in the ring buffer that can fit `V`.
     ///
     /// Returns `None` if the ring buffer is full.
     ///
@@ -91,35 +91,34 @@ impl<V, const M: usize, const F: usize> RingBuf<V, M, F> {
     /// be equal or smaller than 8. If you use this with a `T` that isn't properly aligned, this
     /// function will be compiled to a panic; depending on your panic_handler, this may make
     /// the eBPF program fail to load, or it may make it have undefined behavior.
-    #[cfg(not(generic_const_exprs))]
-    pub fn reserve<T: 'static>(&self, flags: u64) -> Option<RingBufEntry<T>> {
-        assert_eq!(8 % mem::align_of::<T>(), 0);
+    pub fn reserve(&self, flags: u64) -> Option<RingBufEntry<V>> {
+        assert_eq!(8 % mem::align_of::<V>(), 0);
         self.reserve_impl(flags)
     }
 
-    fn reserve_impl<T: 'static>(&self, flags: u64) -> Option<RingBufEntry<T>> {
+    fn reserve_impl(&self, flags: u64) -> Option<RingBufEntry<V>> {
         let ptr =
-            unsafe { bpf_ringbuf_reserve(self.0.get().cast(), mem::size_of::<T>() as u64, flags) }
-                .cast::<MaybeUninit<T>>();
+            unsafe { bpf_ringbuf_reserve(self.0.get().cast(), mem::size_of::<V>() as u64, flags) }
+                .cast::<MaybeUninit<V>>();
         unsafe { ptr.as_mut() }.map(|ptr| RingBufEntry::new(ptr))
     }
 
     /// Copy `data` to the ring buffer output.
     ///
-    /// Consider using [`reserve`] and [`submit`] if `T` is statically sized and you want to save a
+    /// Consider using [`reserve`] and [`submit`] if `V` is statically sized and you want to save a
     /// copy from either a map buffer or the stack.
     ///
     /// Unlike [`reserve`], this function can handle dynamically sized types (which is hard to
     /// create in eBPF but still possible, e.g. by slicing an array).
     ///
-    /// Note: `T` must be aligned to no more than 8 bytes; it's not possible to fulfill larger
-    /// alignment requests. If you use this with a `T` that isn't properly aligned, this function will
+    /// Note: `V` must be aligned to no more than 8 bytes; it's not possible to fulfill larger
+    /// alignment requests. If you use this with a `V` that isn't properly aligned, this function will
     /// be compiled to a panic and silently make your eBPF program fail to load.
     /// See [here](https://github.com/torvalds/linux/blob/3f01e9fed/kernel/bpf/ringbuf.c#L418).
     ///
     /// [`reserve`]: RingBuf::reserve
     /// [`submit`]: RingBufEntry::submit
-    pub fn output<T: ?Sized>(&self, data: impl Borrow<T>, flags: u64) -> Result<(), i64> {
+    pub fn output(&self, data: impl Borrow<V>, flags: u64) -> Result<(), i64> {
         let data = data.borrow();
         assert_eq!(8 % mem::align_of_val(data), 0);
         let ret = unsafe {
