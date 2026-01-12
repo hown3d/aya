@@ -22,6 +22,9 @@ pub struct RingBuf<T, const M: usize, const F: usize = 0>(UnsafeCell<RingBufDef<
 pub struct RingBufDef<V, const M: usize, const F: usize = 0> {
     r#type: *const [i32; BPF_MAP_TYPE_RINGBUF as usize],
     value: *const V,
+    // If not present here the compiler will infer value_size based on the size of V.
+    // However the kernel does not accept RingBuffer maps that use value_size != 0
+    value_size: *const [u32; 0],
     max_entries: *const [i32; M],
     map_flags: *const [i32; F],
 
@@ -38,6 +41,7 @@ impl<V, const M: usize, const F: usize> RingBufDef<V, M, F> {
         Self {
             r#type: ::core::ptr::null(),
             value: ::core::ptr::null(),
+            value_size: ::core::ptr::null(),
             max_entries: ::core::ptr::null(),
             map_flags: ::core::ptr::null(),
             _anon: btf_maps::AyaBtfMapMarker::new(),
