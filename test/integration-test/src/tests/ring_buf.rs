@@ -17,7 +17,7 @@ use aya::{
     maps::{
         MapData,
         array::PerCpuArray,
-        ring_buf::{RingBuf, TypedRingBuf},
+        ring_buf::{RingBuf, RingBufError, TypedRingBuf},
     },
     programs::UProbe,
 };
@@ -184,7 +184,7 @@ fn ring_buf(n: usize) {
 }
 
 #[test_log::test]
-fn ring_buf_struct_typed() {
+fn ring_buf_typed_struct() {
     let RingBufTest {
         ring_buf,
         _bpf,
@@ -195,12 +195,43 @@ fn ring_buf_struct_typed() {
         prog: "ring_buf_struct",
     });
 
-    let mut ring_buf: TypedRingBuf<_, Test> = TypedRingBuf::from(ring_buf);
+    let mut ring_buf: TypedRingBuf<Test> = TypedRingBuf::try_from(ring_buf).unwrap();
     ring_buf_trigger_ebpf_program(123);
 
     let item = ring_buf.next().unwrap();
     let t = *item;
     assert_eq!(t.data, 123);
+}
+
+#[test_log::test]
+fn ring_buf_typed_non_btf() {
+    let RingBufTest {
+        ring_buf,
+        _bpf,
+        regs: _,
+    } = RingBufTest::new(RingBufVariant {
+        map: RING_BUF_LEGACY,
+        regs: "REGISTERS",
+        prog: "ring_buf_struct",
+    });
+
+    let map: Result<TypedRingBuf<u32>, RingBufError> = TypedRingBuf::try_from(ring_buf);
+    assert_eq!(
+        map.err().unwrap().to_string(),
+        RingBufError::NotBTFMap.to_string()
+    );
+}
+
+#[test_log::test]
+fn ring_buf_typed_btf_without_type() {
+    let mut bpf = Ebpf::load(crate::RINGBUF_BTF).unwrap();
+    let ring_buf = bpf.take_map("map_2").unwrap();
+    let ring_buf = RingBuf::try_from(ring_buf).unwrap();
+    let map: Result<TypedRingBuf<u32>, RingBufError> = TypedRingBuf::try_from(ring_buf);
+    assert_eq!(
+        map.err().unwrap().to_string(),
+        RingBufError::ValueTypeNotFound.to_string()
+    );
 }
 
 #[unsafe(no_mangle)]

@@ -16,6 +16,7 @@ use std::{
 
 use aya_obj::generated::{BPF_RINGBUF_BUSY_BIT, BPF_RINGBUF_DISCARD_BIT, BPF_RINGBUF_HDR_SZ};
 use libc::{MAP_SHARED, PROT_READ, PROT_WRITE};
+use thiserror::Error;
 
 use crate::{
     maps::{MapData, MapError},
@@ -151,13 +152,13 @@ impl<T: Borrow<MapData>> AsRawFd for RingBuf<T> {
 }
 
 /// TypedRingBuf
-pub struct TypedRingBuf<T, V> {
-    ring_buf: RingBuf<T>,
+pub struct TypedRingBuf<V> {
+    ring_buf: RingBuf<MapData>,
     _v: PhantomData<V>,
 }
 
-impl<T, V> TypedRingBuf<T, V> {
-    /// Returns the next of this [`TypedRingBuf<T, V>`].
+impl<V> TypedRingBuf<V> {
+    /// Returns the next of this [`TypedRingBuf<V>`].
     #[expect(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<TypedRingBufItem<'_, V>> {
         let typed_item: TypedRingBufItem<'_, V> = self.ring_buf.next()?.into();
@@ -165,11 +166,33 @@ impl<T, V> TypedRingBuf<T, V> {
     }
 }
 
-impl<T: Borrow<MapData>, V> From<RingBuf<T>> for TypedRingBuf<T, V> {
-    fn from(value: RingBuf<T>) -> Self {
-        Self {
-            ring_buf: value,
-            _v: PhantomData,
+/// RingBufError
+#[derive(Error, Debug)]
+pub enum RingBufError {
+    #[error("value type not found in maps BTF metadata")]
+    /// Value type not found in maps BTF metadata
+    ValueTypeNotFound,
+
+    #[error("not BTF map")]
+    /// Map is not a BTF map
+    NotBTFMap,
+}
+
+impl<V> TryFrom<RingBuf<MapData>> for TypedRingBuf<V> {
+    type Error = RingBufError;
+
+    fn try_from(value: RingBuf<MapData>) -> Result<Self, Self::Error> {
+        match value.map.borrow().obj() {
+            aya_obj::Map::Btf(btf_map) => {
+                if btf_map.def.btf_value_type_id == 0 {
+                    return Err(RingBufError::ValueTypeNotFound);
+                }
+                Ok(Self {
+                    ring_buf: value,
+                    _v: PhantomData,
+                })
+            }
+            _ => Err(RingBufError::NotBTFMap),
         }
     }
 }

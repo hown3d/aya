@@ -9,6 +9,11 @@ struct {
   __type(value, __u32);
 } map SEC(".maps");
 
+struct {
+  __uint(type, BPF_MAP_TYPE_RINGBUF);
+  __uint(max_entries, 1 << 24);
+} map_2 SEC(".maps");
+
 SEC("uprobe")
 int bpf_prog(void *ctx) {
   __u32 val = 0xdeadbeef;
