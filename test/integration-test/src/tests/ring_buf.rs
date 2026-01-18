@@ -18,7 +18,7 @@ use aya::{
     programs::UProbe,
 };
 use aya_obj::generated::BPF_RINGBUF_HDR_SZ;
-use integration_common::ring_buf::Registers;
+use integration_common::ring_buf::{Registers, Test};
 use rand::Rng as _;
 use scopeguard::defer;
 use tokio::io::{Interest, unix::AsyncFd};
@@ -30,10 +30,16 @@ struct RingBufTest {
 }
 
 const RING_BUF: &str = "RING_BUF";
+const RING_BUF_STRUCT: &str = "RING_BUF_STRUCT";
 const RING_BUF_LEGACY: &str = "RING_BUF_LEGACY";
 const RING_BUF_MISMATCH: &str = "RING_BUF_MISMATCH";
 
-const ALL_RING_BUFS: &[&str] = &[RING_BUF, RING_BUF_LEGACY, RING_BUF_MISMATCH];
+const ALL_RING_BUFS: &[&str] = &[
+    RING_BUF,
+    RING_BUF_LEGACY,
+    RING_BUF_MISMATCH,
+    RING_BUF_STRUCT,
+];
 
 #[derive(Clone, Copy)]
 struct RingBufVariant {
@@ -171,6 +177,23 @@ fn ring_buf(n: usize) {
         assert_eq!(dropped, expected_dropped);
         assert_eq!(rejected, expected_rejected);
     }
+}
+
+#[test_log::test]
+fn ring_buf_struct_typed() {
+    let RingBufTest {
+        mut ring_buf,
+        _bpf,
+        regs: _,
+    } = RingBufTest::new(RingBufVariant {
+        map: RING_BUF_STRUCT,
+        regs: "REGISTERS",
+        prog: "ring_buf_struct",
+    });
+
+    ring_buf_trigger_ebpf_program(123);
+    let t: Test = ring_buf.next().unwrap().typed();
+    assert_eq!(t.data, 123);
 }
 
 #[unsafe(no_mangle)]

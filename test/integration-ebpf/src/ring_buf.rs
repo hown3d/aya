@@ -8,12 +8,15 @@ use aya_ebpf::{
     maps::{PerCpuArray, RingBuf as LegacyRingBuf},
     programs::ProbeContext,
 };
-use integration_common::ring_buf::Registers;
+use integration_common::ring_buf::{Registers, Test};
 #[cfg(not(test))]
 extern crate ebpf_panic;
 
 #[btf_map]
 static RING_BUF: BtfRingBuf<u64, 0, 0> = BtfRingBuf::new();
+
+#[btf_map]
+static RING_BUF_STRUCT: BtfRingBuf<Test, 0, 0> = BtfRingBuf::new();
 
 #[btf_map]
 static RING_BUF_MISMATCH: BtfRingBuf<u32, 0, 0> = BtfRingBuf::new();
@@ -90,3 +93,17 @@ macro_rules! define_ring_buf_mismatch {
 
 define_ring_buf_mismatch!(ring_buf_mismatch_small, u16);
 define_ring_buf_mismatch!(ring_buf_mismatch_large, u64);
+
+#[uprobe]
+fn ring_buf_struct(ctx: ProbeContext) {
+    let mut entry = match RING_BUF_STRUCT.reserve(0) {
+        Some(entry) => entry,
+        None => return,
+    };
+    let arg: u32 = match ctx.arg(0) {
+        Some(arg) => arg,
+        None => return,
+    };
+    entry.write(Test { data: arg });
+    entry.submit(0);
+}

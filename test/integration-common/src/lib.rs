@@ -74,6 +74,15 @@ pub mod ring_buf {
 
     #[cfg(feature = "user")]
     unsafe impl aya::Pod for Registers {}
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+    pub struct Test {
+        pub data: u32,
+    }
+
+    #[cfg(feature = "user")]
+    unsafe impl aya::Pod for Test {}
 }
 
 pub mod strncmp {
