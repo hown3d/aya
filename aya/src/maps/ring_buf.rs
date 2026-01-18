@@ -7,6 +7,7 @@
 use std::{
     borrow::Borrow,
     fmt::{self, Debug, Formatter},
+    marker::PhantomData,
     mem,
     ops::Deref,
     os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd},
@@ -146,6 +147,66 @@ impl<T: Borrow<MapData>> AsFd for RingBuf<T> {
 impl<T: Borrow<MapData>> AsRawFd for RingBuf<T> {
     fn as_raw_fd(&self) -> RawFd {
         self.as_fd().as_raw_fd()
+    }
+}
+
+/// TypedRingBuf
+pub struct TypedRingBuf<T, V> {
+    ring_buf: RingBuf<T>,
+    _v: PhantomData<V>,
+}
+
+impl<T, V> TypedRingBuf<T, V> {
+    /// Returns the next of this [`TypedRingBuf<T, V>`].
+    #[expect(clippy::should_implement_trait)]
+    pub fn next(&mut self) -> Option<TypedRingBufItem<'_, V>> {
+        let typed_item: TypedRingBufItem<'_, V> = self.ring_buf.next()?.into();
+        Some(typed_item)
+    }
+}
+
+impl<T: Borrow<MapData>, V> From<RingBuf<T>> for TypedRingBuf<T, V> {
+    fn from(value: RingBuf<T>) -> Self {
+        Self {
+            ring_buf: value,
+            _v: PhantomData,
+        }
+    }
+}
+
+/// TypedRingBufItem
+pub struct TypedRingBufItem<'a, V> {
+    item: RingBufItem<'a>,
+    _v: PhantomData<V>,
+}
+
+impl<'a, V> From<RingBufItem<'a>> for TypedRingBufItem<'a, V> {
+    fn from(value: RingBufItem<'a>) -> Self {
+        Self {
+            item: value,
+            _v: PhantomData,
+        }
+    }
+}
+
+impl<V> Deref for TypedRingBufItem<'_, V> {
+    type Target = V;
+
+    fn deref(&self) -> &Self::Target {
+        let Self { item, .. } = self;
+        let data = item.data;
+
+        // Safety check: Ensure the buffer actually holds enough bytes for V
+        assert_eq!(
+            data.len(),
+            mem::size_of::<V>(),
+            "Size mismatch: data len {} vs Type size {}",
+            data.len(),
+            mem::size_of::<V>()
+        );
+
+        // Trust me, there is a V here.
+        unsafe { &*data.as_ptr().cast::<V>() }
     }
 }
 

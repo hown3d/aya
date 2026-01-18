@@ -14,7 +14,11 @@ use anyhow::Context as _;
 use assert_matches::assert_matches;
 use aya::{
     Ebpf, EbpfLoader,
-    maps::{MapData, array::PerCpuArray, ring_buf::RingBuf},
+    maps::{
+        MapData,
+        array::PerCpuArray,
+        ring_buf::{RingBuf, TypedRingBuf},
+    },
     programs::UProbe,
 };
 use aya_obj::generated::BPF_RINGBUF_HDR_SZ;
@@ -182,7 +186,7 @@ fn ring_buf(n: usize) {
 #[test_log::test]
 fn ring_buf_struct_typed() {
     let RingBufTest {
-        mut ring_buf,
+        ring_buf,
         _bpf,
         regs: _,
     } = RingBufTest::new(RingBufVariant {
@@ -191,8 +195,11 @@ fn ring_buf_struct_typed() {
         prog: "ring_buf_struct",
     });
 
+    let mut ring_buf: TypedRingBuf<_, Test> = TypedRingBuf::from(ring_buf);
     ring_buf_trigger_ebpf_program(123);
-    let t: Test = ring_buf.next().unwrap().typed();
+
+    let item = ring_buf.next().unwrap();
+    let t = *item;
     assert_eq!(t.data, 123);
 }
 
